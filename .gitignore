@@ -1,22 +1,107 @@
-# Python
+# ============================================
+# Transformer Translation Model .gitignore
+# ============================================
+
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# --- Virtual Environments ---
 venv/
-env Data
-e/
+env/
 ENV/
+env.bak/
+venv.bak/
+pyenv/
 
-#uroparl-v7.de-en.*
+# --- Training Data (Raw Corpus) ---
+# Europarl parallel corpus
+europarl-v7.de-en.de
+europarl-v7.de-en.en
+# Other data files
+*.txt
+*.csv
+*.tsv
+*.jsonl
+*.json.gz
+
+# --- Model Checkpoints and Weights ---
+# PyTorch model files
 *.pt
-*.model
-*.vocab
+*.pth
+*.bin
+*.ckpt
+# Other formats
+*.safetensors
+*.h5
+*.hdf5
 
-# OS
+# --- Training Logs and Outputs ---
+models/logs/
+logs/
+runs/
+wandb/
+tensorboard/
+*.log
+*.csv
+*.tsv
+
+# --- Generated Tokenizer Files ---
+# Uncomment to exclude tokenizer files (generated from training data)
+# models/*.model
+# models/*.vocab
+# models/*_text.txt
+
+# --- Preprocessed Data ---
+*.pkl
+*.pickle
+*.npz
+*.npy
+*.feather
+*.parquet
+
+# --- OS Generated Files ---
 .DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# --- IDE and Editor Files ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-*
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints/
+*.ipynb
+
+# --- Temporary Files ---
+temp/
+tmp/
+*.tmp
+*.temp
+*.cache
+
+# --- Large Dataset Files ---
+*.tar.gz
+*.zip
+*.7z
+*.rar
