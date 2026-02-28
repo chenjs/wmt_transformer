@@ -29,8 +29,7 @@ pyenv/
 # Europarl parallel corpus
 europarl-v7.de-en.de
 europarl-v7.de-en.en
-# Other data files
-*.txt
+# Other large data files
 *.csv
 *.tsv
 *.jsonl
@@ -58,10 +57,10 @@ tensorboard/
 *.tsv
 
 # --- Generated Tokenizer Files ---
-# Uncomment to exclude tokenizer files (generated from training data)
-# models/*.model
-# models/*.vocab
-# models/*_text.txt
+# Tokenizer files (generated from training data, can be regenerated)
+models/*.model
+models/*.vocab
+models/*_text.txt
 
 # --- Preprocessed Data ---
 *.pkl
