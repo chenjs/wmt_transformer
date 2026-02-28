@@ -47,11 +47,16 @@ def main():
         print("Tokenizers not found. Please run preprocess.py first.")
         return
 
-    # Load tokenizers
+    # Load tokenizers and compute vocabulary sizes
+    # FIX 2026-02-26: Compute separate vocabulary sizes for backward compatibility
     print("\nLoading tokenizers...")
     src_tokenizer, tgt_tokenizer = load_tokenizers(
         str(src_tokenizer_path), str(tgt_tokenizer_path)
     )
+    src_vocab_size = src_tokenizer.sp.get_piece_size()
+    tgt_vocab_size = tgt_tokenizer.sp.get_piece_size()
+    print(f"Source vocab size: {src_vocab_size}")
+    print(f"Target vocab size: {tgt_vocab_size}")
 
     # Load checkpoint first to get config
     if checkpoint_path.exists():
@@ -67,13 +72,25 @@ def main():
             config.n_heads = saved_config.n_heads
             config.d_ff = saved_config.d_ff
             config.dropout = saved_config.dropout
+            # FIX 2026-02-26: Handle vocabulary sizes (backward compatibility)
+            # Check if checkpoint has separate vocab sizes or uses old single vocab_size
+            if hasattr(saved_config, 'src_vocab_size') and hasattr(saved_config, 'tgt_vocab_size'):
+                config.src_vocab_size = saved_config.src_vocab_size
+                config.tgt_vocab_size = saved_config.tgt_vocab_size
+                print(f"Loaded config with separate vocab sizes: src={config.src_vocab_size}, tgt={config.tgt_vocab_size}")
+            else:
+                # Old checkpoint: use single vocab_size for both
+                config.src_vocab_size = saved_config.vocab_size
+                config.tgt_vocab_size = saved_config.vocab_size
+                print(f"Loaded old config with single vocab size: {saved_config.vocab_size}")
             print(f"Loaded config: max_len={config.max_len}, d_model={config.d_model}")
 
-        # Create model with saved config
+        # Create model with saved config using separate vocabulary sizes
+        # FIX 2026-02-26: Use src_vocab_size and tgt_vocab_size
         print("Creating model...")
         model = Transformer(
-            src_vocab_size=config.vocab_size,
-            tgt_vocab_size=config.vocab_size,
+            src_vocab_size=config.src_vocab_size,
+            tgt_vocab_size=config.tgt_vocab_size,
             d_model=config.d_model,
             n_layers=config.n_layers,
             n_heads=config.n_heads,
@@ -85,9 +102,12 @@ def main():
         print("Checkpoint loaded!")
     else:
         print("No checkpoint found. Using randomly initialized model.")
+        # FIX 2026-02-26: Use tokenizer vocab sizes for new model
+        config.src_vocab_size = src_vocab_size
+        config.tgt_vocab_size = tgt_vocab_size
         model = Transformer(
-            src_vocab_size=config.vocab_size,
-            tgt_vocab_size=config.vocab_size,
+            src_vocab_size=config.src_vocab_size,
+            tgt_vocab_size=config.tgt_vocab_size,
             d_model=config.d_model,
             n_layers=config.n_layers,
             n_heads=config.n_heads,

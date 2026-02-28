@@ -43,6 +43,43 @@ class ParallelDataset(Dataset):
             'tgt': self.tgt_lines[idx],
         }
 
+    def split(self, split_ratio: float = 0.9, seed: int = 42):
+        """Split dataset into two parts.
+
+        Args:
+            split_ratio: ratio for first part (e.g., 0.9 for 90% train, 10% val)
+            seed: random seed for shuffling
+
+        Returns:
+            Two ParallelDataset instances (train, val)
+        """
+        import numpy as np
+        np.random.seed(seed)
+
+        indices = list(range(len(self)))
+        np.random.shuffle(indices)
+
+        split_point = int(len(self) * split_ratio)
+        train_indices = indices[:split_point]
+        val_indices = indices[split_point:]
+
+        # Create new datasets with selected lines
+        train_src = [self.src_lines[i] for i in train_indices]
+        train_tgt = [self.tgt_lines[i] for i in train_indices]
+        val_src = [self.src_lines[i] for i in val_indices]
+        val_tgt = [self.tgt_lines[i] for i in val_indices]
+
+        # Create new dataset instances (reusing the same class)
+        train_dataset = ParallelDataset.__new__(ParallelDataset)
+        train_dataset.src_lines = train_src
+        train_dataset.tgt_lines = train_tgt
+
+        val_dataset = ParallelDataset.__new__(ParallelDataset)
+        val_dataset.src_lines = val_src
+        val_dataset.tgt_lines = val_tgt
+
+        return train_dataset, val_dataset
+
 
 class TranslationDataset(Dataset):
     """Dataset that returns tokenized sequences."""

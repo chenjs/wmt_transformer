@@ -41,12 +41,16 @@ def create_masks(src, tgt, pad_id: int = 0):
     return src_mask, tgt_mask
 
 
-def create_batch(samples, tokenizer, max_len: int = 100, pad_id: int = 0, device: str = "cpu"):
+def create_batch(samples, src_tokenizer, tgt_tokenizer=None, max_len: int = 100, pad_id: int = 0, device: str = "cpu"):
     """Create a batch from samples.
+
+    FIX 2026-02-26: Added separate src_tokenizer and tgt_tokenizer parameters to fix
+    tokenizer usage bug where German text was incorrectly tokenized with English tokenizer.
 
     Args:
         samples: list of {'src': str, 'tgt': str}
-        tokenizer: tokenizer instance
+        src_tokenizer: source tokenizer instance
+        tgt_tokenizer: target tokenizer instance (optional, defaults to src_tokenizer with warning)
         max_len: maximum sequence length
         pad_id: padding token id
         device: device for tensors
@@ -54,16 +58,22 @@ def create_batch(samples, tokenizer, max_len: int = 100, pad_id: int = 0, device
     Returns:
         dict with tensors
     """
+    if tgt_tokenizer is None:
+        import warnings
+        warnings.warn("tgt_tokenizer not provided, using src_tokenizer for both source and target. "
+                     "This may cause incorrect tokenization for translation tasks.", DeprecationWarning)
+        tgt_tokenizer = src_tokenizer
+
     src_texts = [s['src'] for s in samples]
     tgt_texts = [s['tgt'] for s in samples]
 
     # Tokenize with BOS/EOS
     src_tokens = [
-        tokenizer(s, add_bos=False, add_eos=True)[:max_len]
+        src_tokenizer(s, add_bos=False, add_eos=True)[:max_len]
         for s in src_texts
     ]
     tgt_tokens = [
-        tokenizer(s, add_bos=True, add_eos=True)[:max_len]
+        tgt_tokenizer(s, add_bos=True, add_eos=True)[:max_len]
         for s in tgt_texts
     ]
 
@@ -110,12 +120,21 @@ def create_batch(samples, tokenizer, max_len: int = 100, pad_id: int = 0, device
 
 
 class BatchIterator:
-    """Iterator for creating batches on-the-fly."""
+    """Iterator for creating batches on-the-fly.
 
-    def __init__(self, dataset, tokenizer, batch_size: int = 64,
+    FIX 2026-02-26: Added separate src_tokenizer and tgt_tokenizer parameters to fix
+    tokenizer usage bug where German text was incorrectly tokenized with English tokenizer.
+    """
+
+    def __init__(self, dataset, src_tokenizer, tgt_tokenizer=None, batch_size: int = 64,
                  max_len: int = 100, shuffle: bool = True):
+        if tgt_tokenizer is None:
+            import warnings
+            warnings.warn("tgt_tokenizer not provided, using src_tokenizer for both source and target. "
+                         "This may cause incorrect tokenization for translation tasks.", DeprecationWarning)
         self.dataset = dataset
-        self.tokenizer = tokenizer
+        self.src_tokenizer = src_tokenizer
+        self.tgt_tokenizer = tgt_tokenizer if tgt_tokenizer is not None else src_tokenizer
         self.batch_size = batch_size
         self.max_len = max_len
         self.shuffle = shuffle
@@ -131,7 +150,7 @@ class BatchIterator:
         for i in range(0, len(self.indices), self.batch_size):
             batch_indices = self.indices[i:i + self.batch_size]
             samples = [self.dataset[j] for j in batch_indices]
-            yield create_batch(samples, self.tokenizer, self.max_len)
+            yield create_batch(samples, self.src_tokenizer, self.tgt_tokenizer, self.max_len)  # FIX 2026-02-26: Pass both tokenizers
 
     def __len__(self):
         return (len(self.indices) + self.batch_size - 1) // self.batch_size

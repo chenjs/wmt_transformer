@@ -3,10 +3,32 @@ Transformer model for machine translation.
 """
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 
 from .positional import PositionalEncoding
 from .attention import SelfAttention, CrossAttention
 from .feedforward import FeedForwardBlock
+
+
+def init_transformer_weights(module):
+    """Initialize weights for Transformer modules.
+
+    Args:
+        module: nn.Module to initialize
+    """
+    if isinstance(module, nn.Linear):
+        # Linear layers: use Xavier uniform initialization
+        init.xavier_uniform_(module.weight)
+        if module.bias is not None:
+            init.constant_(module.bias, 0)
+    elif isinstance(module, nn.Embedding):
+        # Embedding layers: use normal initialization with mean=0, std=0.02
+        init.normal_(module.weight, mean=0, std=0.02)
+    elif isinstance(module, nn.LayerNorm):
+        # LayerNorm: weight=1, bias=0 (PyTorch default is already this)
+        init.constant_(module.weight, 1.0)
+        init.constant_(module.bias, 0.0)
+    # Note: PositionalEncoding buffers are not parameters, so not initialized here
 
 
 class EncoderLayer(nn.Module):
@@ -64,7 +86,7 @@ class Encoder(nn.Module):
             EncoderLayer(d_model, n_heads, d_ff, dropout)
             for _ in range(n_layers)
         ])
-        self.norm = nn.LayerNorm(d_model)
+        # Note: No final layer norm in pre-norm architecture
 
     def forward(self, x, mask=None):
         """
@@ -82,7 +104,7 @@ class Encoder(nn.Module):
         for layer in self.layers:
             x = layer(x, mask)
 
-        return self.norm(x)
+        return x  # No final layer norm in pre-norm architecture
 
 
 class Decoder(nn.Module):
@@ -98,7 +120,7 @@ class Decoder(nn.Module):
             DecoderLayer(d_model, n_heads, d_ff, dropout)
             for _ in range(n_layers)
         ])
-        self.norm = nn.LayerNorm(d_model)
+        # Note: No final layer norm in pre-norm architecture
         self.output_proj = nn.Linear(d_model, vocab_size)
 
     def forward(self, x, encoder_output, src_mask=None, tgt_mask=None):
@@ -119,8 +141,7 @@ class Decoder(nn.Module):
         for layer in self.layers:
             x = layer(x, encoder_output, src_mask, tgt_mask)
 
-        x = self.norm(x)
-        return self.output_proj(x)
+        return self.output_proj(x)  # No final layer norm in pre-norm architecture
 
 
 class Transformer(nn.Module):
@@ -137,6 +158,9 @@ class Transformer(nn.Module):
         self.decoder = Decoder(
             tgt_vocab_size, d_model, n_layers, n_heads, d_ff, dropout, max_len
         )
+
+        # Apply custom weight initialization
+        self.apply(init_transformer_weights)
 
     def forward(self, src, tgt, src_mask=None, tgt_mask=None):
         """

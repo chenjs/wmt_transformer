@@ -3,6 +3,7 @@ Trainer for Transformer translation model.
 """
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from pathlib import Path
@@ -30,6 +31,18 @@ class LabelSmoothingLoss(nn.Module):
             target: [batch * seq_len]
         """
         pred = pred.log_softmax(dim=-1)
+
+        # Optimized path for smoothing = 0 (standard cross-entropy)
+        if self.smoothing == 0:
+            # Standard negative log likelihood loss
+            loss = F.nll_loss(
+                pred, target,
+                ignore_index=self.pad_id,
+                reduction='mean'
+            )
+            return loss
+
+        # Original label smoothing implementation for smoothing > 0
         with torch.no_grad():
             true_dist = torch.zeros_like(pred)
             true_dist.fill_(self.smoothing / (self.vocab_size - 1))
@@ -62,10 +75,13 @@ class WarmupScheduler:
 
     def _get_lr(self):
         step = max(1, self.step_num)
-        return self.d_model ** (-0.5) * min(
-            step ** (-0.5),
-            step * self.warmup_steps ** (-1.5)
-        )
+        if self.warmup_steps <= 0:
+            return self.d_model ** (-0.5) * step ** (-0.5)
+        else:
+            return self.d_model ** (-0.5) * min(
+                step ** (-0.5),
+                step * self.warmup_steps ** (-1.5)
+            )
 
 
 class Trainer:
@@ -78,16 +94,22 @@ class Trainer:
         tgt_tokenizer,
         config,
         device: str = "cpu",
+        val_dataset = None,
     ):
         self.model = model.to(device)
         self.src_tokenizer = src_tokenizer
         self.tgt_tokenizer = tgt_tokenizer
         self.config = config
         self.device = device
+        self.val_dataset = val_dataset
+
+        # Compute target vocabulary size from tokenizer
+        # FIX 2026-02-26: Use tgt_tokenizer's vocab size instead of config.vocab_size
+        tgt_vocab_size = tgt_tokenizer.sp.get_piece_size()
 
         # Loss function
         self.criterion = LabelSmoothingLoss(
-            config.vocab_size, config.label_smoothing, pad_id=0
+            tgt_vocab_size, config.label_smoothing, pad_id=0
         )
 
         # Optimizer
@@ -106,6 +128,10 @@ class Trainer:
         # Checkpoint directory
         self.checkpoint_dir = Path(config.checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        # Log directory
+        self.log_dir = self.checkpoint_dir / "logs"
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
     def train_step(self, batch):
         """Single training step."""
@@ -138,7 +164,52 @@ class Trainer:
 
         return loss.item()
 
-    def train_epoch(self, dataset, batch_size: int, max_len: int = 100, global_step: int = 0):
+    def evaluate_loss(self, dataset, batch_size: int = None, max_len: int = 100):
+        """Evaluate loss on dataset."""
+        if dataset is None:
+            return None
+
+        self.model.eval()
+        if batch_size is None:
+            batch_size = self.config.batch_size
+
+        total_loss = 0
+        num_batches = 0
+
+        indices = list(range(len(dataset)))
+
+        with torch.no_grad():
+            for i in range(0, len(indices), batch_size):
+                batch_indices = indices[i:i + batch_size]
+                samples = [dataset[j] for j in batch_indices]
+                batch = create_batch(samples, self.src_tokenizer, self.tgt_tokenizer, max_len, pad_id=0, device=self.device)
+
+                src = batch['src'].to(self.device)
+                tgt = batch['tgt'].to(self.device)
+                src_mask = batch['src_mask'].to(self.device)
+
+                # Create tgt_input and tgt_output (shifted)
+                tgt_input = tgt[:, :-1]
+                tgt_output = tgt[:, 1:]
+
+                # Create masks
+                _, tgt_mask = create_masks(tgt_input, tgt_input, pad_id=0)
+
+                # Forward pass
+                output = self.model(src, tgt_input, src_mask, tgt_mask)
+
+                # Compute loss
+                output = output.reshape(-1, output.size(-1))
+                tgt_output = tgt_output.reshape(-1)
+                loss = self.criterion(output, tgt_output)
+
+                total_loss += loss.item()
+                num_batches += 1
+
+        self.model.train()
+        return total_loss / num_batches if num_batches > 0 else None
+
+    def train_epoch(self, dataset, batch_size: int, max_len: int = 100, global_step: int = 0, step_log_file=None):
         """Train for one epoch."""
         self.model.train()
         total_loss = 0
@@ -152,7 +223,7 @@ class Trainer:
         for i in range(0, len(indices), batch_size):
             batch_indices = indices[i:i + batch_size]
             samples = [dataset[j] for j in batch_indices]
-            batch = create_batch(samples, self.src_tokenizer, max_len, pad_id=0, device=self.device)
+            batch = create_batch(samples, self.src_tokenizer, self.tgt_tokenizer, max_len, pad_id=0, device=self.device)  # FIX 2026-02-26: Pass both tokenizers
 
             loss = self.train_step(batch)
             total_loss += loss
@@ -162,6 +233,11 @@ class Trainer:
             # Print each step
             current_lr = self.scheduler._get_lr()
             print(f"Step {global_step}: loss={loss:.4f}, lr={current_lr:.6f}")
+
+            # Log to file if provided
+            if step_log_file is not None:
+                step_log_file.write(f"{global_step},{loss:.6f},{current_lr:.6f}\n")
+                step_log_file.flush()
 
         return total_loss / num_batches, global_step
 
@@ -178,13 +254,49 @@ class Trainer:
         dataset_size = len(dataset)
         batches_per_epoch = dataset_size // batch_size
 
+        # Open log files
+        step_log_path = self.log_dir / "step_log.csv"
+        epoch_log_path = self.log_dir / "epoch_log.csv"
+        val_log_path = self.log_dir / "val_log.csv"
+
+        # Write headers if files don't exist
+        if not step_log_path.exists():
+            with open(step_log_path, 'w', encoding='utf-8') as f:
+                f.write("step,loss,lr\n")
+        if not epoch_log_path.exists():
+            with open(epoch_log_path, 'w', encoding='utf-8') as f:
+                f.write("step,epoch_loss,lr\n")
+        if not val_log_path.exists():
+            with open(val_log_path, 'w', encoding='utf-8') as f:
+                f.write("step,val_loss\n")
+
+        # Open files for appending
+        step_log_file = open(step_log_path, 'a', encoding='utf-8')
+        epoch_log_file = open(epoch_log_path, 'a', encoding='utf-8')
+        val_log_file = open(val_log_path, 'a', encoding='utf-8')
+
         while global_step < max_steps:
             # Train for one epoch
-            epoch_loss, global_step = self.train_epoch(dataset, batch_size, max_len, global_step)
+            epoch_loss, global_step = self.train_epoch(dataset, batch_size, max_len, global_step, step_log_file)
 
             # Print epoch progress
             current_lr = self.scheduler._get_lr()
             print(f"Epoch complete (step {global_step}): avg_loss={epoch_loss:.4f}, lr={current_lr:.6f}")
+
+            # Log epoch to file
+            epoch_log_file.write(f"{global_step},{epoch_loss:.6f},{current_lr:.6f}\n")
+            epoch_log_file.flush()
+
+            # Evaluate on validation set periodically
+            if (self.val_dataset is not None and
+                self.config.eval_interval > 0 and
+                global_step > 0 and
+                global_step % self.config.eval_interval == 0):
+                val_loss = self.evaluate_loss(self.val_dataset, batch_size, max_len)
+                if val_loss is not None:
+                    print(f"Validation (step {global_step}): loss={val_loss:.4f}")
+                    val_log_file.write(f"{global_step},{val_loss:.6f}\n")
+                    val_log_file.flush()
 
             # Save checkpoint
             if epoch_loss < best_loss:
@@ -201,6 +313,12 @@ class Trainer:
                 break
 
         print("Training completed!")
+
+        # Close log files
+        step_log_file.close()
+        epoch_log_file.close()
+        val_log_file.close()
+
         return best_loss
 
     def save_checkpoint(self, filename: str, step: int = None):

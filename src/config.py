@@ -13,8 +13,10 @@ class Config:
     tgt_file: str = "europarl-v7.de-en.de"  # German
 
     # Tokenizer
-    vocab_size: int = 32000
-    max_len: int = 64
+    vocab_size: int = 32000  # Deprecated: use src_vocab_size and tgt_vocab_size
+    src_vocab_size: int = 32000  # FIX 2026-02-26: Added for separate source vocabulary
+    tgt_vocab_size: int = 32000  # FIX 2026-02-26: Added for separate target vocabulary
+    max_len: int = 32  # Reduced from 64 to save memory
 
     # Model architecture
     d_model: int = 512
@@ -24,20 +26,21 @@ class Config:
     dropout: float = 0.1
 
     # Training
-    batch_size: int = 16
-    learning_rate: float = 1e-4
-    warmup_steps: int = 4000
-    max_steps: int = 20000
-    label_smoothing: float = 0.1
-    clip_grad: float = 1.0
+    batch_size: int = 12  # Increased from 8 to reduce epoch time
+    learning_rate: float = 1e-3  # Increased from 5e-4 for faster convergence with pre-norm
+    warmup_steps: int = 8000     # Restored to standard warmup steps
+    max_steps: int = 200000       # Increased from 20000 for better convergence
+    label_smoothing: float = 0.1  # Enable label smoothing for better generalization
+    clip_grad: float = 10.0  # Increased from 5.0 to allow larger gradients
 
     # Data
     train_split: float = 0.99
-    max_train_samples: int = 100000  # Limit for faster training on Mac
+    max_train_samples: int = 200000  # Increased from 100000 for better learning
 
     # Checkpoint
     checkpoint_dir: Path = Path(__file__).parent.parent / "models"
-    save_interval: int = 5000
+    save_interval: int = 10000
+    eval_interval: int = 5000  # Evaluate on validation set every N steps
 
     # Device
     device: str = "mps"  # Will fallback to cpu if mps unavailable

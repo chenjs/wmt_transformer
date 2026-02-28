@@ -61,8 +61,11 @@ def main(resume_from: str = None):
     print(f"Source vocab size: {src_tokenizer.sp.get_piece_size()}")
     print(f"Target vocab size: {tgt_tokenizer.sp.get_piece_size()}")
 
-    # Update config vocab size
-    config.vocab_size = src_tokenizer.sp.get_piece_size()
+    # Update config vocabulary sizes
+    # FIX 2026-02-26: Set separate vocabulary sizes for source and target
+    config.src_vocab_size = src_tokenizer.sp.get_piece_size()
+    config.tgt_vocab_size = tgt_tokenizer.sp.get_piece_size()
+    config.vocab_size = config.src_vocab_size  # Backward compatibility
 
     # Load dataset
     print("\nLoading dataset...")
@@ -75,11 +78,17 @@ def main(resume_from: str = None):
     )
     print(f"Dataset size: {len(dataset)}")
 
-    # Create model
+    # Split into train and validation sets
+    train_dataset, val_dataset = dataset.split(split_ratio=config.train_split, seed=42)
+    print(f"Training set: {len(train_dataset)} samples")
+    print(f"Validation set: {len(val_dataset)} samples")
+
+    # Create model with separate vocabulary sizes
+    # FIX 2026-02-26: Use src_vocab_size and tgt_vocab_size instead of single vocab_size
     print("\nCreating model...")
     model = Transformer(
-        src_vocab_size=config.vocab_size,
-        tgt_vocab_size=config.vocab_size,
+        src_vocab_size=config.src_vocab_size,
+        tgt_vocab_size=config.tgt_vocab_size,
         d_model=config.d_model,
         n_layers=config.n_layers,
         n_heads=config.n_heads,
@@ -96,6 +105,7 @@ def main(resume_from: str = None):
         tgt_tokenizer=tgt_tokenizer,
         config=config,
         device=device,
+        val_dataset=val_dataset,
     )
 
     # Resume from checkpoint if specified
@@ -118,7 +128,7 @@ def main(resume_from: str = None):
     # Train
     print("\nStarting training...")
     trainer.train(
-        dataset=dataset,
+        dataset=train_dataset,
         batch_size=config.batch_size,
         max_steps=config.max_steps,
         max_len=config.max_len,

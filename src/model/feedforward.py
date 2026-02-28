@@ -40,6 +40,8 @@ class FeedForwardBlock(nn.Module):
         Returns:
             [batch, seq_len, d_model]
         """
-        ff_output = self.ff(x)
-        x = self.norm(x + self.dropout(ff_output))
+        # Pre-norm: normalize before feed-forward
+        x_norm = self.norm(x)
+        ff_output = self.ff(x_norm)
+        x = x + self.dropout(ff_output)
         return x

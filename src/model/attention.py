@@ -85,8 +85,10 @@ class SelfAttention(nn.Module):
             x: [batch, seq_len, d_model]
             mask: [batch, 1, 1, seq_len]
         """
-        attn_output, _ = self.attention(x, x, x, mask)
-        x = self.norm(x + self.dropout(attn_output))
+        # Pre-norm: normalize before attention
+        x_norm = self.norm(x)
+        attn_output, _ = self.attention(x_norm, x_norm, x_norm, mask)
+        x = x + self.dropout(attn_output)
         return x
 
 
@@ -106,6 +108,8 @@ class CrossAttention(nn.Module):
             encoder_output: [batch, src_len, d_model]
             mask: [batch, 1, tgt_len, src_len]
         """
-        attn_output, _ = self.attention(x, encoder_output, encoder_output, mask)
-        x = self.norm(x + self.dropout(attn_output))
+        # Pre-norm: normalize decoder input before attention
+        x_norm = self.norm(x)
+        attn_output, _ = self.attention(x_norm, encoder_output, encoder_output, mask)
+        x = x + self.dropout(attn_output)
         return x
