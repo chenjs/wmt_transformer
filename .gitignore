@@ -65,6 +65,7 @@ models/*_text.txt
 models_enhanced/
 models_original/
 models_test/
+models_backup/
 
 # --- Preprocessed Data ---
 *.pkl
