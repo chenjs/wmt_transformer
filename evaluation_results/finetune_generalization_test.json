@@ -1,0 +1,107 @@
+[
+  {
+    "category": "Basic",
+    "src": "Hello",
+    "finetuned": "Hallo",
+    "original": "Hallo",
+    "same": true
+  },
+  {
+    "category": "Basic",
+    "src": "Thank you",
+    "finetuned": "Danke",
+    "original": "Danke",
+    "same": true
+  },
+  {
+    "category": "Basic",
+    "src": "Good morning",
+    "finetuned": "Guten Morgen",
+    "original": "Guten Morgen",
+    "same": true
+  },
+  {
+    "category": "Simple",
+    "src": "I am going to the store.",
+    "finetuned": "Ich stimme zu",
+    "original": "Ich stimme zu",
+    "same": true
+  },
+  {
+    "category": "Simple",
+    "src": "She reads a book every day.",
+    "finetuned": "Senden Sie sich an",
+    "original": "Es schneit",
+    "same": false
+  },
+  {
+    "category": "Simple",
+    "src": "The weather is nice today.",
+    "finetuned": "Heute ist gut",
+    "original": "Heute ist gut",
+    "same": true
+  },
+  {
+    "category": "Moderate",
+    "src": "Can you help me with this problem please?",
+    "finetuned": "Können Sie mir helfen?",
+    "original": "Können Sie mir helfen?",
+    "same": true
+  },
+  {
+    "category": "Moderate",
+    "src": "I would like to order a cup of coffee.",
+    "finetuned": "Ich hätte gern Kaffee",
+    "original": "Ich hätte gern Kaffee",
+    "same": true
+  },
+  {
+    "category": "Moderate",
+    "src": "What is the time of the next train to Berlin?",
+    "finetuned": "Wie spät ist es?",
+    "original": "Wie spät ist es?",
+    "same": true
+  },
+  {
+    "category": "Complex",
+    "src": "Despite the heavy rain, the football match continued as scheduled.",
+    "finetuned": "Ich bin krank",
+    "original": "Wo ist der Bahnhof?",
+    "same": false
+  },
+  {
+    "category": "Complex",
+    "src": "The scientist who discovered the new element was awarded the Nobel Prize.",
+    "finetuned": "Der Himmel ist blau",
+    "original": "Es ist kalt",
+    "same": false
+  },
+  {
+    "category": "Complex",
+    "src": "If I had known about the meeting, I would have prepared the presentation in advance.",
+    "finetuned": "Ich hätte gern Kaffee",
+    "original": "Ich hätte gern Kaffee",
+    "same": true
+  },
+  {
+    "category": "Abstract",
+    "src": "The concept of democracy is fundamental to modern society.",
+    "finetuned": "Der Himmel ist blau",
+    "original": "Der Himmel ist blau",
+    "same": true
+  },
+  {
+    "category": "Abstract",
+    "src": "Economic growth depends on innovation and investment.",
+    "finetuned": "Hören Sie auf",
+    "original": "Das sind Orangen",
+    "same": false
+  },
+  {
+    "category": "Abstract",
+    "src": "Philosophy explores the nature of existence and knowledge.",
+    "finetuned": "Hallo",
+    "original": "Entschuldigung",
+    "same": false
+  }
+]

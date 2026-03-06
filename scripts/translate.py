@@ -38,13 +38,15 @@ def main():
 
     # Paths
     data_dir = Path(__file__).parent.parent
-    src_tokenizer_path = data_dir / "models" / "src_tokenizer.model"
-    tgt_tokenizer_path = data_dir / "models" / "tgt_tokenizer.model"
+    src_tokenizer_path = data_dir / "models_enhanced" / "src_tokenizer_final.model"
+    tgt_tokenizer_path = data_dir / "models_enhanced" / "tgt_tokenizer_final.model"
     checkpoint_path = data_dir / "models" / "best_model.pt"
 
     # Check if tokenizers exist
     if not src_tokenizer_path.exists() or not tgt_tokenizer_path.exists():
-        print("Tokenizers not found. Please run preprocess.py first.")
+        print(f"Enhanced tokenizers not found.")
+        print(f"Expected: {src_tokenizer_path} and {tgt_tokenizer_path}")
+        print("Please run preprocess_enhanced.py first.")
         return
 
     # Load tokenizers and compute vocabulary sizes
@@ -134,8 +136,8 @@ def main():
             if not src_text:
                 continue
 
-            # Translate
-            tgt_text = evaluator.translate(src_text, method="greedy")
+            # Translate using beam-4 as default (best performing method)
+            tgt_text = evaluator.translate(src_text, method="beam", beam_size=4)
             print(f"German> {tgt_text}")
 
         except KeyboardInterrupt:

@@ -17,10 +17,10 @@ def main():
     print("Translation Quality Evaluation")
     print("=" * 80)
 
-    # Load tokenizers
+    # Load tokenizers - use enhanced tokenizers (consistent with training)
     data_dir = Path(__file__).parent
-    src_tokenizer_path = data_dir / "models" / "src_tokenizer.model"
-    tgt_tokenizer_path = data_dir / "models" / "tgt_tokenizer.model"
+    src_tokenizer_path = data_dir / "models_enhanced" / "src_tokenizer_final.model"
+    tgt_tokenizer_path = data_dir / "models_enhanced" / "tgt_tokenizer_final.model"
     checkpoint_path = data_dir / "models" / "best_model.pt"
 
     src_tokenizer, tgt_tokenizer = load_tokenizers(
@@ -98,7 +98,7 @@ def main():
     total = len(test_cases)
 
     for i, (src, expected) in enumerate(test_cases):
-        translation = evaluator.translate(src, method="greedy")
+        translation = evaluator.translate(src, method="beam", beam_size=4)
 
         # Clean up translation (remove special tokens)
         translation = translation.replace("[BOS]", "").replace("[EOS]", "").strip()
@@ -141,15 +141,15 @@ def main():
 
     comparison_cases = ["Hello", "Thank you", "This is a test"]
     for src in comparison_cases:
-        greedy = evaluator.translate(src, method="greedy")
-        beam = evaluator.translate(src, method="beam")
+        greedy = evaluator.translate(src, method="greedy")  # Keep for comparison
+        beam = evaluator.translate(src, method="beam", beam_size=4)
 
         greedy = greedy.replace("[BOS]", "").replace("[EOS]", "").strip()
         beam = beam.replace("[BOS]", "").replace("[EOS]", "").strip()
 
         print(f"\nInput: '{src}'")
         print(f"  Greedy: '{greedy}'")
-        print(f"  Beam search (k=5): '{beam}'")
+        print(f"  Beam search (beam_size=4): '{beam}'")
         if greedy == beam:
             print(f"  ⚠️  Both methods produce same output")
         else:
@@ -166,7 +166,7 @@ def main():
     ]
 
     for src, desc in length_test:
-        translation = evaluator.translate(src, method="greedy")
+        translation = evaluator.translate(src, method="beam", beam_size=4)
         translation = translation.replace("[BOS]", "").replace("[EOS]", "").strip()
         print(f"{desc} input ({len(src.split())} words): '{src}'")
         print(f"  → '{translation}' ({len(translation.split())} words)")

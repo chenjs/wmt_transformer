@@ -216,12 +216,13 @@ class Evaluator:
         # Get max_len from model's positional encoding
         self.max_len = model.decoder.pos_encoding.pe.size(1)
 
-    def translate(self, src_text: str, method: str = "greedy") -> str:
+    def translate(self, src_text: str, method: str = "greedy", beam_size: int = 4) -> str:
         """Translate a single sentence.
 
         Args:
             src_text: source text
             method: decoding method ("greedy" or "beam")
+            beam_size: beam size for beam search (default: 4)
 
         Returns:
             translated text
@@ -239,7 +240,7 @@ class Evaluator:
         else:
             return beam_search_decode(self.model, src, src_mask,
                                      self.src_tokenizer, self.tgt_tokenizer,
-                                     max_len=self.max_len, device=self.device)
+                                     max_len=self.max_len, beam_size=beam_size, device=self.device)
 
     def evaluate(self, dataset, max_samples: int = 100, method: str = "greedy") -> dict:
         """Evaluate on a dataset.

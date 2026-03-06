@@ -13,10 +13,10 @@ from src.data.tokenizer import load_tokenizers
 from src.model import Transformer
 
 def main():
-    # Load tokenizers
+    # Load tokenizers - use enhanced tokenizers (consistent with training)
     data_dir = Path(__file__).parent
-    src_tokenizer_path = data_dir / "models" / "src_tokenizer.model"
-    tgt_tokenizer_path = data_dir / "models" / "tgt_tokenizer.model"
+    src_tokenizer_path = data_dir / "models_enhanced" / "src_tokenizer_final.model"
+    tgt_tokenizer_path = data_dir / "models_enhanced" / "tgt_tokenizer_final.model"
     checkpoint_path = data_dir / "models" / "best_model.pt"
 
     if not checkpoint_path.exists():

@@ -13,10 +13,10 @@ from src.data.tokenizer import load_tokenizers
 from src.model import Transformer
 
 def test_model():
-    # Load tokenizers
+    # Load tokenizers - use enhanced tokenizers (consistent with training)
     data_dir = Path(__file__).parent
-    src_tokenizer_path = data_dir / "models" / "src_tokenizer.model"
-    tgt_tokenizer_path = data_dir / "models" / "tgt_tokenizer.model"
+    src_tokenizer_path = data_dir / "models_enhanced" / "src_tokenizer_final.model"
+    tgt_tokenizer_path = data_dir / "models_enhanced" / "tgt_tokenizer_final.model"
     checkpoint_path = data_dir / "models" / "best_model.pt"
 
     if not checkpoint_path.exists():
@@ -88,9 +88,9 @@ def test_model():
     from src.evaluate import Evaluator
     evaluator = Evaluator(model, src_tokenizer, tgt_tokenizer, device)
 
-    print("Testing model translations:")
+    print("Testing model translations (using beam search with beam_size=4):")
     for i, src_text in enumerate(test_sentences):
-        tgt_text = evaluator.translate(src_text, method="greedy")
+        tgt_text = evaluator.translate(src_text, method="beam", beam_size=4)
         print(f"{i+1}. Input: '{src_text}'")
         print(f"   Output: '{tgt_text}'")
         print()
