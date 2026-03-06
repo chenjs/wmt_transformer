@@ -61,6 +61,11 @@ tensorboard/
 models/*.model
 models/*.vocab
 models/*_text.txt
+# Enhanced tokenizers and cleaned data
+models_enhanced/
+models_original/
+models_test/
+models_backup/
 
 # --- Preprocessed Data ---
 *.pkl
