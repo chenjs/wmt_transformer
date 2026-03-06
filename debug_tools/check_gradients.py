@@ -15,10 +15,10 @@ from src.model import Transformer
 from src.data.batch import create_batch
 
 def main():
-    # Load tokenizers
+    # Load tokenizers - use enhanced tokenizers (consistent with training)
     data_dir = Path(__file__).parent.parent
-    src_tokenizer_path = data_dir / "models" / "src_tokenizer.model"
-    tgt_tokenizer_path = data_dir / "models" / "tgt_tokenizer.model"
+    src_tokenizer_path = data_dir / "models_enhanced" / "src_tokenizer_final.model"
+    tgt_tokenizer_path = data_dir / "models_enhanced" / "tgt_tokenizer_final.model"
     checkpoint_path = data_dir / "models" / "best_model.pt"
 
     src_tokenizer, tgt_tokenizer = load_tokenizers(

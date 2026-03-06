@@ -13,10 +13,10 @@ class Config:
     tgt_file: str = "europarl-v7.de-en.de"  # German
 
     # Tokenizer
-    vocab_size: int = 32000  # Deprecated: use src_vocab_size and tgt_vocab_size
-    src_vocab_size: int = 32000  # FIX 2026-02-26: Added for separate source vocabulary
-    tgt_vocab_size: int = 32000  # FIX 2026-02-26: Added for separate target vocabulary
-    max_len: int = 32  # Reduced from 64 to save memory
+    vocab_size: int = 16000  # Deprecated: use src_vocab_size and tgt_vocab_size
+    src_vocab_size: int = 16000  # FIX 2026-02-26: Added for separate source vocabulary
+    tgt_vocab_size: int = 16000  # FIX 2026-02-26: Added for separate target vocabulary
+    max_len: int = 54  # Based on 90th percentile of cleaned data (45 words * 1.2)
 
     # Model architecture
     d_model: int = 512
@@ -41,13 +41,14 @@ class Config:
     checkpoint_dir: Path = Path(__file__).parent.parent / "models"
     save_interval: int = 10000
     eval_interval: int = 5000  # Evaluate on validation set every N steps
+    min_loss_improvement: float = 0.01  # Only save best model if loss improves by at least 1%
 
     # Device
     device: str = "mps"  # Will fallback to cpu if mps unavailable
 
     # Tokenizer paths (will be created during preprocessing)
-    src_tokenizer: str = ""
-    tgt_tokenizer: str = ""
+    src_tokenizer: str = "models_enhanced/src_tokenizer_final.model"
+    tgt_tokenizer: str = "models_enhanced/tgt_tokenizer_final.model"
 
 
 # Global config instance

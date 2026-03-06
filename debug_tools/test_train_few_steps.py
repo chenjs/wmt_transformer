@@ -29,10 +29,10 @@ def main():
     device = "cpu"
     config.device = device
 
-    # Load tokenizers
+    # Load tokenizers - use enhanced tokenizers (consistent with training)
     data_dir = Path(__file__).parent
-    src_tokenizer_path = data_dir / "models" / "src_tokenizer.model"
-    tgt_tokenizer_path = data_dir / "models" / "tgt_tokenizer.model"
+    src_tokenizer_path = data_dir / "models_enhanced" / "src_tokenizer_final.model"
+    tgt_tokenizer_path = data_dir / "models_enhanced" / "tgt_tokenizer_final.model"
 
     if not src_tokenizer_path.exists() or not tgt_tokenizer_path.exists():
         print("Tokenizers not found. Please run preprocess.py first.")
@@ -102,7 +102,7 @@ def main():
 
     test_sentences = ["Hello", "Good morning", "Thank you"]
     for text in test_sentences:
-        translation = evaluator.translate(text, method="greedy")
+        translation = evaluator.translate(text, method="beam", beam_size=4)
         print(f"'{text}' → '{translation[:50]}...'")
 
 if __name__ == "__main__":

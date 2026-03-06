@@ -107,9 +107,9 @@ def evaluate_model():
     print("模型翻译质量评估")
     print("=" * 80)
 
-    # 加载 tokenizers
-    src_tokenizer_path = project_root / "models" / "src_tokenizer.model"
-    tgt_tokenizer_path = project_root / "models" / "tgt_tokenizer.model"
+    # 加载 tokenizers - 使用增强分词器（与训练一致）
+    src_tokenizer_path = project_root / "models_enhanced" / "src_tokenizer_final.model"
+    tgt_tokenizer_path = project_root / "models_enhanced" / "tgt_tokenizer_final.model"
     checkpoint_path = project_root / "models" / "best_model.pt"
 
     if not checkpoint_path.exists():
@@ -189,7 +189,7 @@ def evaluate_model():
 
     results = []
     for src, expected in test_cases:
-        translation = evaluator.translate(src, method="greedy")
+        translation = evaluator.translate(src, method="beam", beam_size=4)
 
         # 清理翻译结果
         translation = translation.replace("[BOS]", "").replace("[EOS]", "").strip()

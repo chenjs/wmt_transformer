@@ -1,0 +1,105 @@
+{
+  "Greedy": {
+    "config": {
+      "name": "Greedy",
+      "method": "greedy",
+      "params": {}
+    },
+    "metrics": {
+      "bleu_score": 0.0,
+      "ter_score": 0.0,
+      "meteor_score": 0.0,
+      "perfect_matches": 0,
+      "partial_matches": 14,
+      "poor_matches": 26,
+      "output_diversity": 0.9704447583099063,
+      "repetition_rate": 0.0,
+      "avg_inference_time": 0.17300567626953126,
+      "avg_output_length": 6.525
+    }
+  },
+  "Beam-4": {
+    "config": {
+      "name": "Beam-4",
+      "method": "beam",
+      "params": {
+        "beam_size": 4
+      }
+    },
+    "metrics": {
+      "bleu_score": 0.0,
+      "ter_score": 0.0,
+      "meteor_score": 0.0,
+      "perfect_matches": 0,
+      "partial_matches": 18,
+      "poor_matches": 22,
+      "output_diversity": 0.976427704038534,
+      "repetition_rate": 0.0,
+      "avg_inference_time": 0.9251593053340912,
+      "avg_output_length": 5.2
+    }
+  },
+  "Beam-8": {
+    "config": {
+      "name": "Beam-8",
+      "method": "beam",
+      "params": {
+        "beam_size": 8
+      }
+    },
+    "metrics": {
+      "bleu_score": 0.0,
+      "ter_score": 0.0,
+      "meteor_score": 0.0,
+      "perfect_matches": 0,
+      "partial_matches": 18,
+      "poor_matches": 22,
+      "output_diversity": 0.976427704038534,
+      "repetition_rate": 0.0,
+      "avg_inference_time": 0.951715886592865,
+      "avg_output_length": 5.2
+    }
+  },
+  "Top-k-50": {
+    "config": {
+      "name": "Top-k-50",
+      "method": "topk",
+      "params": {
+        "k": 50
+      }
+    },
+    "metrics": {
+      "bleu_score": 0.0,
+      "ter_score": 0.0,
+      "meteor_score": 0.0,
+      "perfect_matches": 0,
+      "partial_matches": 14,
+      "poor_matches": 26,
+      "output_diversity": 0.9704447583099063,
+      "repetition_rate": 0.0,
+      "avg_inference_time": 0.1745483696460724,
+      "avg_output_length": 6.525
+    }
+  },
+  "Top-p-0.9": {
+    "config": {
+      "name": "Top-p-0.9",
+      "method": "topp",
+      "params": {
+        "p": 0.9
+      }
+    },
+    "metrics": {
+      "bleu_score": 0.0,
+      "ter_score": 0.0,
+      "meteor_score": 0.0,
+      "perfect_matches": 0,
+      "partial_matches": 14,
+      "poor_matches": 26,
+      "output_diversity": 0.9704447583099063,
+      "repetition_rate": 0.0,
+      "avg_inference_time": 0.17437582612037658,
+      "avg_output_length": 6.525
+    }
+  }
+}

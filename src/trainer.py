@@ -158,9 +158,31 @@ class Trainer:
         # Backward pass
         self.optimizer.zero_grad()
         loss.backward()
+
+        # Compute gradient norm before clipping
+        total_norm = 0.0
+        for p in self.model.parameters():
+            if p.grad is not None:
+                param_norm = p.grad.detach().data.norm(2)
+                total_norm += param_norm.item() ** 2
+        grad_norm_before = total_norm ** 0.5
+
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip_grad)
+
+        # Compute gradient norm after clipping
+        total_norm = 0.0
+        for p in self.model.parameters():
+            if p.grad is not None:
+                param_norm = p.grad.detach().data.norm(2)
+                total_norm += param_norm.item() ** 2
+        grad_norm_after = total_norm ** 0.5
+
         self.optimizer.step()
         self.scheduler.step()
+
+        # Print gradient info every 100 steps
+        if self.scheduler.step_num % 100 == 0:
+            print(f"Step {self.scheduler.step_num}: grad_norm before={grad_norm_before:.4f}, after={grad_norm_after:.4f}")
 
         return loss.item()
 
@@ -207,9 +229,35 @@ class Trainer:
                 num_batches += 1
 
         self.model.train()
+        if num_batches == 0:
+            print(f"Warning: evaluate_loss: num_batches=0, dataset size={len(dataset)}, batch_size={batch_size}")
+        else:
+            print(f"evaluate_loss: processed {num_batches} batches, avg_loss={total_loss/num_batches:.4f}")
         return total_loss / num_batches if num_batches > 0 else None
 
-    def train_epoch(self, dataset, batch_size: int, max_len: int = 100, global_step: int = 0, step_log_file=None):
+    def _get_last_validation_step(self, val_log_path):
+        """Get the last validation step from validation log file."""
+        import csv
+        last_step = 0
+        try:
+            if val_log_path.exists():
+                with open(val_log_path, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    # Skip header
+                    next(reader, None)
+                    for row in reader:
+                        if row and len(row) >= 1:
+                            try:
+                                step = int(float(row[0]))
+                                last_step = max(last_step, step)
+                            except ValueError:
+                                continue
+        except Exception as e:
+            print(f"Warning: Failed to read validation log: {e}")
+        return last_step
+
+    def train_epoch(self, dataset, batch_size: int, max_len: int = 100, global_step: int = 0, step_log_file=None,
+                   val_log_file=None, val_log_path=None):
         """Train for one epoch."""
         self.model.train()
         total_loss = 0
@@ -239,7 +287,30 @@ class Trainer:
                 step_log_file.write(f"{global_step},{loss:.6f},{current_lr:.6f}\n")
                 step_log_file.flush()
 
-        return total_loss / num_batches, global_step
+            # Check for validation at appropriate intervals
+            if (val_log_file is not None and val_log_path is not None and
+                self.val_dataset is not None and self.config.eval_interval > 0 and
+                global_step > 0 and global_step % self.config.eval_interval == 0):
+
+                print(f"\n{'='*60}")
+                print(f"IN-EPOCH VALIDATION at step {global_step}")
+                print(f"{'='*60}")
+
+                val_loss = self.evaluate_loss(self.val_dataset, batch_size, max_len)
+                if val_loss is not None:
+                    print(f"In-epoch validation (step {global_step}): loss={val_loss:.4f}")
+                    val_log_file.write(f"{global_step},{val_loss:.6f}\n")
+                    val_log_file.flush()
+                    print(f"In-epoch validation result saved")
+                else:
+                    print(f"ERROR: In-epoch validation loss is None at step {global_step}")
+
+                print(f"{'='*60}\n")
+
+        # Calculate average loss for the epoch
+        epoch_loss = total_loss / num_batches if num_batches > 0 else 0
+
+        return epoch_loss, global_step
 
     def train(self, dataset, batch_size: int, max_steps: int, max_len: int = 100, start_step: int = 0):
         """Full training loop."""
@@ -248,6 +319,9 @@ class Trainer:
         print(f"Dataset size: {len(dataset)}, batches per epoch: {len(dataset) // batch_size}")
 
         print(f"self.config.save_interval: {self.config.save_interval}")
+        print(f"self.config.eval_interval: {self.config.eval_interval}")
+        print(f"self.config.clip_grad: {self.config.clip_grad}")
+        print(f"Validation dataset size: {len(self.val_dataset) if self.val_dataset is not None else 0}")
 
         global_step = start_step
         best_loss = float('inf')
@@ -275,61 +349,124 @@ class Trainer:
         epoch_log_file = open(epoch_log_path, 'a', encoding='utf-8')
         val_log_file = open(val_log_path, 'a', encoding='utf-8')
 
-        while global_step < max_steps:
-            # Train for one epoch
-            epoch_loss, global_step = self.train_epoch(dataset, batch_size, max_len, global_step, step_log_file)
+        try:
+            while global_step < max_steps:
+                # Train for one epoch
+                epoch_loss, global_step = self.train_epoch(dataset, batch_size, max_len, global_step, step_log_file,
+                                                          val_log_file, val_log_path)
 
-            # Print epoch progress
-            current_lr = self.scheduler._get_lr()
-            print(f"Epoch complete (step {global_step}): avg_loss={epoch_loss:.4f}, lr={current_lr:.6f}")
+                # Print epoch progress
+                current_lr = self.scheduler._get_lr()
+                print(f"Epoch complete (step {global_step}): avg_loss={epoch_loss:.4f}, lr={current_lr:.6f}")
 
-            # Log epoch to file
-            epoch_log_file.write(f"{global_step},{epoch_loss:.6f},{current_lr:.6f}\n")
-            epoch_log_file.flush()
+                # Log epoch to file
+                epoch_log_file.write(f"{global_step},{epoch_loss:.6f},{current_lr:.6f}\n")
+                epoch_log_file.flush()
 
-            # Evaluate on validation set periodically
-            if (self.val_dataset is not None and
-                self.config.eval_interval > 0 and
-                global_step > 0 and
-                global_step % self.config.eval_interval == 0):
-                val_loss = self.evaluate_loss(self.val_dataset, batch_size, max_len)
-                if val_loss is not None:
-                    print(f"Validation (step {global_step}): loss={val_loss:.4f}")
-                    val_log_file.write(f"{global_step},{val_loss:.6f}\n")
-                    val_log_file.flush()
+                # TODO: Epoch-level validation check - now handled inside train_epoch
+                # Keeping this commented for potential future use
+                # Evaluate on validation set periodically
+                # if (self.val_dataset is not None and
+                #     self.config.eval_interval > 0 and
+                #     global_step > 0 and
+                #     global_step % self.config.eval_interval == 0):
+                #
+                #     print(f"\n{'='*60}")
+                #     print(f"VALIDATION CHECK at step {global_step}")
+                #     print(f"{'='*60}")
+                #     print(f"Validation dataset size: {len(self.val_dataset)}")
+                #     print(f"Eval interval: {self.config.eval_interval}")
+                #     print(f"Last validation step: {self._get_last_validation_step(val_log_path)}")
+                #
+                #     val_loss = self.evaluate_loss(self.val_dataset, batch_size, max_len)
+                #     if val_loss is not None:
+                #         print(f"Validation (step {global_step}): loss={val_loss:.4f}")
+                #         val_log_file.write(f"{global_step},{val_loss:.6f}\n")
+                #         val_log_file.flush()
+                #         print(f"Validation result saved to {val_log_path}")
+                #     else:
+                #         print(f"ERROR: Validation loss is None at step {global_step}")
+                #         print(f"Check validation dataset and batch creation")
+                #
+                #     print(f"{'='*60}\n")
 
-            # Save checkpoint
-            if epoch_loss < best_loss:
-                best_loss = epoch_loss
-                self.save_checkpoint(f"best_model.pt", global_step)
-                print(f"Saved best model (loss={best_loss:.4f})")
+                # Save checkpoint with improvement threshold
+                if epoch_loss < best_loss:
+                    # Calculate improvement percentage
+                    if best_loss == float('inf'):
+                        # First save, always save
+                        improvement = 1.0
+                        should_save = True
+                    else:
+                        improvement = (best_loss - epoch_loss) / best_loss
+                        should_save = False  # Default to not saving
 
-            # Periodic checkpoint (save every save_interval steps)
-            if global_step > 0 and global_step % self.config.save_interval == 0:
-                self.save_checkpoint(f"checkpoint_step_{global_step}.pt", global_step)
+                        # Check if improvement meets threshold
+                        if (hasattr(self.config, 'min_loss_improvement') and
+                            self.config.min_loss_improvement is not None and
+                            self.config.min_loss_improvement > 0):
 
-            # Stop if max steps reached
-            if global_step >= max_steps:
-                break
+                            if improvement >= self.config.min_loss_improvement:
+                                should_save = True
+                            else:
+                                print(f"Loss improved by {improvement:.2%} but below threshold {self.config.min_loss_improvement:.2%}, skipping save")
+                        else:
+                            # Default behavior: any improvement
+                            should_save = True
 
-        print("Training completed!")
+                    if should_save:
+                        best_loss = epoch_loss
+                        self.save_checkpoint(f"best_model.pt", global_step)
+                        print(f"Saved best model (loss={best_loss:.4f}, improvement={improvement:.2%})")
 
-        # Close log files
-        step_log_file.close()
-        epoch_log_file.close()
-        val_log_file.close()
+                # Periodic checkpoint (save every save_interval steps)
+                if global_step > 0 and global_step % self.config.save_interval == 0:
+                    self.save_checkpoint(f"checkpoint_step_{global_step}.pt", global_step)
+
+                # Stop if max steps reached
+                if global_step >= max_steps:
+                    break
+
+            print("Training completed!")
+
+        except KeyboardInterrupt:
+            print("\n" + "="*60)
+            print("Training interrupted by user (Ctrl+C)")
+            print(f"Saving interrupted checkpoint at step {global_step}...")
+            self.save_checkpoint(f"checkpoint_interrupted.pt", global_step)
+            print("Interrupted checkpoint saved. Exiting gracefully.")
+            print("="*60)
+
+        finally:
+            # Close log files (always close, even on interrupt)
+            try:
+                step_log_file.close()
+            except:
+                pass
+            try:
+                epoch_log_file.close()
+            except:
+                pass
+            try:
+                val_log_file.close()
+            except:
+                pass
 
         return best_loss
 
     def save_checkpoint(self, filename: str, step: int = None):
         """Save model checkpoint."""
         checkpoint_path = self.checkpoint_dir / filename
-        torch.save({
+        checkpoint = {
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'config': self.config,
             'step': step,
-        }, checkpoint_path)
+        }
+        # Save scheduler state if available
+        if hasattr(self.scheduler, 'step_num'):
+            checkpoint['scheduler_step_num'] = self.scheduler.step_num
+        torch.save(checkpoint, checkpoint_path)
         print(f"Checkpoint saved to {checkpoint_path}")
 
     def load_checkpoint(self, filename: str):
@@ -338,4 +475,16 @@ class Trainer:
         checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        # Restore scheduler step number
+        if hasattr(self.scheduler, 'step_num'):
+            # First try to get scheduler_step_num from checkpoint
+            if 'scheduler_step_num' in checkpoint:
+                self.scheduler.step_num = checkpoint['scheduler_step_num']
+                print(f"Restored scheduler step from checkpoint: {self.scheduler.step_num}")
+            # Fallback to using step field
+            elif 'step' in checkpoint:
+                self.scheduler.step_num = checkpoint['step']
+                print(f"Set scheduler step from step field: {self.scheduler.step_num}")
+            else:
+                print(f"Warning: No step information found in checkpoint, scheduler step may be incorrect")
         print(f"Checkpoint loaded from {checkpoint_path}")

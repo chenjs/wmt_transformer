@@ -26,10 +26,10 @@ def check_training_progress():
         print("建议至少训练1000步后再进行检查")
         return
 
-    # 加载tokenizer
+    # 加载tokenizer - 使用增强分词器（与训练一致）
     data_dir = Path(__file__).parent
-    src_tokenizer_path = data_dir / "models" / "src_tokenizer.model"
-    tgt_tokenizer_path = data_dir / "models" / "tgt_tokenizer.model"
+    src_tokenizer_path = data_dir / "models_enhanced" / "src_tokenizer_final.model"
+    tgt_tokenizer_path = data_dir / "models_enhanced" / "tgt_tokenizer_final.model"
 
     if not src_tokenizer_path.exists() or not tgt_tokenizer_path.exists():
         print("tokenizer文件不存在，请先运行preprocess.py")
@@ -135,7 +135,7 @@ def check_training_progress():
 
         outputs = []
         for text in test_inputs:
-            translation = evaluator.translate(text, method="greedy")
+            translation = evaluator.translate(text, method="beam", beam_size=4)
             outputs.append(translation)
             print(f"'{text}' → '{translation[:50]}...'")
 
