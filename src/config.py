@@ -26,7 +26,7 @@ class Config:
     dropout: float = 0.1
 
     # Training
-    batch_size: int = 12  # Increased from 8 to reduce epoch time
+    batch_size: int =32    # 12  # Increased from 8 to reduce epoch time
     learning_rate: float = 1e-3  # Increased from 5e-4 for faster convergence with pre-norm
     warmup_steps: int = 8000     # Restored to standard warmup steps
     max_steps: int = 200000       # Increased from 20000 for better convergence

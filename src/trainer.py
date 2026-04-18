@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 import math
 from tqdm import tqdm
+from datetime import datetime
 
 from .model import Transformer
 from .data.batch import create_batch, create_masks
@@ -182,7 +183,8 @@ class Trainer:
 
         # Print gradient info every 100 steps
         if self.scheduler.step_num % 100 == 0:
-            print(f"Step {self.scheduler.step_num}: grad_norm before={grad_norm_before:.4f}, after={grad_norm_after:.4f}")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{timestamp}] Step {self.scheduler.step_num}: grad_norm before={grad_norm_before:.4f}, after={grad_norm_after:.4f}")
 
         return loss.item()
 
@@ -280,7 +282,10 @@ class Trainer:
 
             # Print each step
             current_lr = self.scheduler._get_lr()
-            print(f"Step {global_step}: loss={loss:.4f}, lr={current_lr:.6f}")
+
+            if global_step % 20 == 0:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"[{timestamp}] Step {global_step}: loss={loss:.4f}, lr={current_lr:.6f}")
 
             # Log to file if provided
             if step_log_file is not None:
