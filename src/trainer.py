@@ -58,14 +58,45 @@ class LabelSmoothingLoss(nn.Module):
         return loss.mean()
 
 
+# class WarmupScheduler:
+#     """Learning rate scheduler with warmup."""
+
+#     def __init__(self, optimizer, d_model: int, warmup_steps: int):
+#         self.optimizer = optimizer
+#         self.d_model = d_model
+#         self.warmup_steps = warmup_steps
+#         self.step_num = 0
+
+#     def step(self):
+#         self.step_num += 1
+#         lr = self._get_lr()
+#         for param_group in self.optimizer.param_groups:
+#             param_group['lr'] = lr
+#         return lr
+
+#     def _get_lr(self):
+#         step = max(1, self.step_num)
+#         if self.warmup_steps <= 0:
+#             return self.d_model ** (-0.5) * step ** (-0.5)
+#         else:
+#             return self.d_model ** (-0.5) * min(
+#                 step ** (-0.5),
+#                 step * self.warmup_steps ** (-1.5)
+#             )
+
 class WarmupScheduler:
     """Learning rate scheduler with warmup."""
 
-    def __init__(self, optimizer, d_model: int, warmup_steps: int):
+    def __init__(self, optimizer, d_model: int, warmup_steps: int, total_training_steps: int, peak_lr, initial_lr, min_lr):
         self.optimizer = optimizer
         self.d_model = d_model
         self.warmup_steps = warmup_steps
+        self.total_training_steps = total_training_steps
         self.step_num = 0
+        self.initial_lr = initial_lr
+        self.peak_lr  = peak_lr
+        self.min_lr = min_lr
+        self.lr_increment = (self.peak_lr - self.initial_lr) / self.warmup_steps
 
     def step(self):
         self.step_num += 1
@@ -75,15 +106,18 @@ class WarmupScheduler:
         return lr
 
     def _get_lr(self):
-        step = max(1, self.step_num)
-        if self.warmup_steps <= 0:
-            return self.d_model ** (-0.5) * step ** (-0.5)
-        else:
-            return self.d_model ** (-0.5) * min(
-                step ** (-0.5),
-                step * self.warmup_steps ** (-1.5)
-            )
+        # step = max(1, self.step_num)
 
+        # Adjust the learning rate based on the current phase (warmup or cosine annealing)
+        if self.step_num < self.warmup_steps:
+            # Linear warmup
+            lr = self.initial_lr + self.step_num * self.lr_increment
+        else:
+            # Cosine annealing after warmup
+            progress = ((self.step_num - self.warmup_steps) / (self.total_training_steps - self.warmup_steps))
+            lr = self.min_lr + (self.peak_lr - self.min_lr) * 0.5 * (1 + math.cos(math.pi * progress))
+        
+        return lr     
 
 class Trainer:
     """Trainer for Transformer model."""
@@ -113,17 +147,24 @@ class Trainer:
             tgt_vocab_size, config.label_smoothing, pad_id=0
         )
 
-        # Optimizer
-        self.optimizer = optim.Adam(
-            model.parameters(),
-            lr=config.learning_rate,
-            betas=(0.9, 0.98),
-            eps=1e-9,
-        )
+        # # Optimizer
+        # self.optimizer = optim.Adam(
+        #     model.parameters(),
+        #     lr=config.learning_rate,
+        #     betas=(0.9, 0.98),
+        #     eps=1e-9,
+        # )
 
-        # Learning rate scheduler
+        # # Learning rate scheduler
+        # self.scheduler = WarmupScheduler(
+        #     self.optimizer, config.d_model, config.warmup_steps
+        # )
+        peak_lr = self.config.learning_rate
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=peak_lr, weight_decay=0.1)
+
         self.scheduler = WarmupScheduler(
-            self.optimizer, config.d_model, config.warmup_steps
+            self.optimizer, config.d_model, config.warmup_steps, config.max_steps, 
+            peak_lr=config.learning_rate, initial_lr=1e-6, min_lr=1e-6
         )
 
         # Checkpoint directory
@@ -133,6 +174,10 @@ class Trainer:
         # Log directory
         self.log_dir = self.checkpoint_dir / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
+
+    def calc_loss_batch(self, output, tgt_output):
+        loss = torch.nn.functional.cross_entropy(output.flatten(0, 1), tgt_output.flatten())
+        return loss
 
     def train_step(self, batch):
         """Single training step."""
@@ -150,39 +195,50 @@ class Trainer:
         # Forward pass
         output = self.model(src, tgt_input, src_mask, tgt_mask)
 
-        # Compute loss
-        output = output.reshape(-1, output.size(-1))
-        tgt_output = tgt_output.reshape(-1)
+        # # Compute loss
+        # output = output.reshape(-1, output.size(-1))
+        # tgt_output = tgt_output.reshape(-1)
+        # loss = self.criterion(output, tgt_output)
 
-        loss = self.criterion(output, tgt_output)
+        # # Compute loss (Method2: without LabelSmoothing)
+        loss = self.calc_loss_batch(output, tgt_output)
 
         # Backward pass
         self.optimizer.zero_grad()
         loss.backward()
 
-        # Compute gradient norm before clipping
-        total_norm = 0.0
-        for p in self.model.parameters():
-            if p.grad is not None:
-                param_norm = p.grad.detach().data.norm(2)
-                total_norm += param_norm.item() ** 2
-        grad_norm_before = total_norm ** 0.5
+        # # Compute gradient norm before clipping
+        # total_norm = 0.0
+        # for p in self.model.parameters():
+        #     if p.grad is not None:
+        #         param_norm = p.grad.detach().data.norm(2)
+        #         total_norm += param_norm.item() ** 2
+        # grad_norm_before = total_norm ** 0.5
 
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip_grad)
+        # torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip_grad)
 
-        # Compute gradient norm after clipping
-        total_norm = 0.0
-        for p in self.model.parameters():
-            if p.grad is not None:
-                param_norm = p.grad.detach().data.norm(2)
-                total_norm += param_norm.item() ** 2
-        grad_norm_after = total_norm ** 0.5
+        # # Compute gradient norm after clipping
+        # total_norm = 0.0
+        # for p in self.model.parameters():
+        #     if p.grad is not None:
+        #         param_norm = p.grad.detach().data.norm(2)
+        #         total_norm += param_norm.item() ** 2
+        # grad_norm_after = total_norm ** 0.5
+
+        # 梯度裁剪，并返回裁剪前的范数
+        grad_norm_before = torch.nn.utils.clip_grad_norm_(
+            self.model.parameters(), self.config.clip_grad
+        ) 
+        # 不裁剪，只计算当前范数
+        grad_norm_after = torch.nn.utils.clip_grad_norm_(
+            self.model.parameters(), float('inf')
+        ) 
 
         self.optimizer.step()
         self.scheduler.step()
 
-        # Print gradient info every 100 steps
-        if self.scheduler.step_num % 100 == 0:
+        # Print gradient info every 500 steps
+        if self.scheduler.step_num % 500 == 0:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{timestamp}] Step {self.scheduler.step_num}: grad_norm before={grad_norm_before:.4f}, after={grad_norm_after:.4f}")
 
@@ -222,10 +278,13 @@ class Trainer:
                 # Forward pass
                 output = self.model(src, tgt_input, src_mask, tgt_mask)
 
-                # Compute loss
-                output = output.reshape(-1, output.size(-1))
-                tgt_output = tgt_output.reshape(-1)
-                loss = self.criterion(output, tgt_output)
+                # # Compute loss
+                # output = output.reshape(-1, output.size(-1))
+                # tgt_output = tgt_output.reshape(-1)
+                # loss = self.criterion(output, tgt_output)
+
+                # # Compute loss (Method2: without LabelSmoothing)
+                loss = self.calc_loss_batch(output, tgt_output)                
 
                 total_loss += loss.item()
                 num_batches += 1
@@ -237,26 +296,26 @@ class Trainer:
             print(f"evaluate_loss: processed {num_batches} batches, avg_loss={total_loss/num_batches:.4f}")
         return total_loss / num_batches if num_batches > 0 else None
 
-    def _get_last_validation_step(self, val_log_path):
-        """Get the last validation step from validation log file."""
-        import csv
-        last_step = 0
-        try:
-            if val_log_path.exists():
-                with open(val_log_path, 'r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
-                    # Skip header
-                    next(reader, None)
-                    for row in reader:
-                        if row and len(row) >= 1:
-                            try:
-                                step = int(float(row[0]))
-                                last_step = max(last_step, step)
-                            except ValueError:
-                                continue
-        except Exception as e:
-            print(f"Warning: Failed to read validation log: {e}")
-        return last_step
+    # def _get_last_validation_step(self, val_log_path):
+    #     """Get the last validation step from validation log file."""
+    #     import csv
+    #     last_step = 0
+    #     try:
+    #         if val_log_path.exists():
+    #             with open(val_log_path, 'r', encoding='utf-8') as f:
+    #                 reader = csv.reader(f)
+    #                 # Skip header
+    #                 next(reader, None)
+    #                 for row in reader:
+    #                     if row and len(row) >= 1:
+    #                         try:
+    #                             step = int(float(row[0]))
+    #                             last_step = max(last_step, step)
+    #                         except ValueError:
+    #                             continue
+    #     except Exception as e:
+    #         print(f"Warning: Failed to read validation log: {e}")
+    #     return last_step
 
     def train_epoch(self, dataset, batch_size: int, max_len: int = 100, global_step: int = 0, step_log_file=None,
                    val_log_file=None, val_log_path=None):
@@ -285,12 +344,12 @@ class Trainer:
 
             if global_step % 20 == 0:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                print(f"[{timestamp}] Step {global_step}: loss={loss:.4f}, lr={current_lr:.6f}")
+                print(f"[{timestamp}] Step {global_step}: loss={loss:.4f}, lr={current_lr:.7f}")
 
-            # Log to file if provided
-            if step_log_file is not None:
-                step_log_file.write(f"{global_step},{loss:.6f},{current_lr:.6f}\n")
-                step_log_file.flush()
+                # Log to file if provided
+                if step_log_file is not None:
+                    step_log_file.write(f"{global_step},{loss:.6f},{current_lr:.6f}\n")
+                    step_log_file.flush()
 
             # Check for validation at appropriate intervals
             if (val_log_file is not None and val_log_path is not None and
@@ -321,6 +380,7 @@ class Trainer:
         """Full training loop."""
         print(f"Training on {self.device}")
         print(f"Total training steps: {max_steps}")
+        print(f"Warmup steps: {self.config.warmup_steps}")
         print(f"Dataset size: {len(dataset)}, batches per epoch: {len(dataset) // batch_size}")
 
         print(f"self.config.save_interval: {self.config.save_interval}")
@@ -354,15 +414,18 @@ class Trainer:
         epoch_log_file = open(epoch_log_path, 'a', encoding='utf-8')
         val_log_file = open(val_log_path, 'a', encoding='utf-8')
 
+        i_epoch = 0
         try:
             while global_step < max_steps:
                 # Train for one epoch
+                i_epoch += 1
+
                 epoch_loss, global_step = self.train_epoch(dataset, batch_size, max_len, global_step, step_log_file,
                                                           val_log_file, val_log_path)
 
                 # Print epoch progress
                 current_lr = self.scheduler._get_lr()
-                print(f"Epoch complete (step {global_step}): avg_loss={epoch_loss:.4f}, lr={current_lr:.6f}")
+                print(f"Epoch[{i_epoch}] complete (step {global_step}): avg_loss={epoch_loss:.4f}, lr={current_lr:.6f}")
 
                 # Log epoch to file
                 epoch_log_file.write(f"{global_step},{epoch_loss:.6f},{current_lr:.6f}\n")
