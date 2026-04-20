@@ -510,7 +510,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Comprehensive translation evaluation")
-    parser.add_argument("--checkpoint", type=str, default="models/best_model_200000_steps.pt",
+    parser.add_argument("--checkpoint", type=str, default="models/best_model.pt",
                        help="Path to model checkpoint")
     parser.add_argument("--device", type=str, default="cpu",
                        help="Device to use (cpu, mps, cuda)")

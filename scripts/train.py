@@ -28,36 +28,36 @@ def get_device():
         return "cpu"
 
 
-def get_last_step_from_log(log_dir: Path) -> int:
-    """
-    从训练日志文件获取最后一个步数。
+# def get_last_step_from_log(log_dir: Path) -> int:
+#     """
+#     从训练日志文件获取最后一个步数。
 
-    Args:
-        log_dir: 日志目录路径
+#     Args:
+#         log_dir: 日志目录路径
 
-    Returns:
-        最后一个步数，如果没有日志则返回0
-    """
-    step_log_path = log_dir / "step_log.csv"
-    if not step_log_path.exists():
-        return 0
+#     Returns:
+#         最后一个步数，如果没有日志则返回0
+#     """
+#     step_log_path = log_dir / "step_log.csv"
+#     if not step_log_path.exists():
+#         return 0
 
-    last_step = 0
-    try:
-        import csv
-        with open(step_log_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                try:
-                    step = int(row['step'])
-                    if step > last_step:
-                        last_step = step
-                except (ValueError, KeyError):
-                    continue
-    except Exception as e:
-        print(f"警告: 读取日志文件失败: {e}")
+#     last_step = 0
+#     try:
+#         import csv
+#         with open(step_log_path, 'r', encoding='utf-8') as f:
+#             reader = csv.DictReader(f)
+#             for row in reader:
+#                 try:
+#                     step = int(row['step'])
+#                     if step > last_step:
+#                         last_step = step
+#                 except (ValueError, KeyError):
+#                     continue
+#     except Exception as e:
+#         print(f"警告: 读取日志文件失败: {e}")
 
-    return last_step
+#     return last_step
 
 
 def main(resume_from: str = None, max_steps: int = None):
@@ -148,19 +148,19 @@ def main(resume_from: str = None, max_steps: int = None):
     start_step = 0
     auto_resume_detected = False
 
-    # 如果没有指定检查点，但日志文件存在，尝试自动恢复步数
-    if not resume_from:
-        log_dir = data_dir / "models" / "logs"
-        last_step = get_last_step_from_log(log_dir)
-        if last_step > 0:
-            print(f"\n检测到上次训练日志，最后步数: {last_step}")
-            print(f"注意: 自动从步数 {last_step + 1} 继续步数计数。")
-            print("这只会恢复步数显示，不会恢复模型参数。")
-            print("要恢复模型参数，请使用 --resume 参数指定检查点文件。")
-            # 自动继续（从下一步开始）
-            start_step = last_step + 1
-            auto_resume_detected = True
-            print(f"自动从步数 {start_step} 继续训练")
+    # # 如果没有指定检查点，但日志文件存在，尝试自动恢复步数
+    # if not resume_from:
+    #     log_dir = data_dir / "models" / "logs"
+    #     last_step = get_last_step_from_log(log_dir)
+    #     if last_step > 0:
+    #         print(f"\n检测到上次训练日志，最后步数: {last_step}")
+    #         print(f"注意: 自动从步数 {last_step + 1} 继续步数计数。")
+    #         print("这只会恢复步数显示，不会恢复模型参数。")
+    #         print("要恢复模型参数，请使用 --resume 参数指定检查点文件。")
+    #         # 自动继续（从下一步开始）
+    #         start_step = last_step + 1
+    #         auto_resume_detected = True
+    #         print(f"自动从步数 {start_step} 继续训练")
 
     if resume_from:
         checkpoint_path = data_dir / "models" / resume_from

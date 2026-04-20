@@ -26,16 +26,16 @@ class Config:
     dropout: float = 0.1
 
     # Training
-    batch_size: int = 12  # Increased from 8 to reduce epoch time
+    batch_size: int = 32    # 12  # Increased from 8 to reduce epoch time
     learning_rate: float = 1e-3  # Increased from 5e-4 for faster convergence with pre-norm
     warmup_steps: int = 8000     # Restored to standard warmup steps
-    max_steps: int = 200000       # Increased from 20000 for better convergence
+    max_steps: int = 100000    # 200000       # Increased from 20000 for better convergence
     label_smoothing: float = 0.1  # Enable label smoothing for better generalization
     clip_grad: float = 10.0  # Increased from 5.0 to allow larger gradients
 
     # Data
     train_split: float = 0.99
-    max_train_samples: int = 200000  # Increased from 100000 for better learning
+    max_train_samples: int = 600000  # Increased from 100000 for better learning
 
     # Checkpoint
     checkpoint_dir: Path = Path(__file__).parent.parent / "models"

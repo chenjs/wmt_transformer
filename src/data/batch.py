@@ -41,7 +41,7 @@ def create_masks(src, tgt, pad_id: int = 0):
     return src_mask, tgt_mask
 
 
-def create_batch(samples, src_tokenizer, tgt_tokenizer=None, max_len: int = 100, pad_id: int = 0, device: str = "cpu"):
+def create_batch(samples, src_tokenizer, tgt_tokenizer, max_len: int = 100, pad_id: int = 0, device: str = "cpu"):
     """Create a batch from samples.
 
     FIX 2026-02-26: Added separate src_tokenizer and tgt_tokenizer parameters to fix
@@ -58,24 +58,31 @@ def create_batch(samples, src_tokenizer, tgt_tokenizer=None, max_len: int = 100,
     Returns:
         dict with tensors
     """
-    if tgt_tokenizer is None:
-        import warnings
-        warnings.warn("tgt_tokenizer not provided, using src_tokenizer for both source and target. "
-                     "This may cause incorrect tokenization for translation tasks.", DeprecationWarning)
-        tgt_tokenizer = src_tokenizer
 
     src_texts = [s['src'] for s in samples]
     tgt_texts = [s['tgt'] for s in samples]
 
     # Tokenize with BOS/EOS
-    src_tokens = [
-        src_tokenizer(s, add_bos=False, add_eos=True)[:max_len]
-        for s in src_texts
-    ]
-    tgt_tokens = [
-        tgt_tokenizer(s, add_bos=True, add_eos=True)[:max_len]
-        for s in tgt_texts
-    ]
+    # src_tokens = [
+    #     src_tokenizer(s, add_bos=False, add_eos=True)[:max_len]
+    #     for s in src_texts
+    # ]
+    # tgt_tokens = [
+    #     tgt_tokenizer(s, add_bos=True, add_eos=True)[:max_len]
+    #     for s in tgt_texts
+    # ]
+
+    # Tokenize with BOS/EOS
+    src_tokens, tgt_tokens = [], []
+    for s in src_texts:
+        src_token_ids = src_tokenizer(s, add_bos=False, add_eos=True)[:max_len]
+        src_token_ids[-1] = src_tokenizer.eos_id
+        src_tokens.append(src_token_ids)
+
+    for s in tgt_texts:
+        tgt_token_ids = tgt_tokenizer(s, add_bos=True, add_eos=True)[:max_len]
+        tgt_token_ids[-1] = tgt_tokenizer.eos_id
+        tgt_tokens.append(tgt_token_ids)
 
     # Pad to max_len
     batch_size = len(samples)
@@ -104,7 +111,8 @@ def create_batch(samples, src_tokenizer, tgt_tokenizer=None, max_len: int = 100,
         src_mask[i, 0, 0, :src_len] = True
 
         # Target mask: padding AND causal
-        valid_tgt = torch.ones(max_tgt_len, dtype=torch.bool, device=device)
+        # valid_tgt = torch.ones(max_tgt_len, dtype=torch.bool, device=device)
+        valid_tgt = torch.zeros(max_tgt_len, dtype=torch.bool, device=device)
         valid_tgt[:tgt_len] = True
 
         # Causal mask
@@ -119,38 +127,38 @@ def create_batch(samples, src_tokenizer, tgt_tokenizer=None, max_len: int = 100,
     }
 
 
-class BatchIterator:
-    """Iterator for creating batches on-the-fly.
+# class BatchIterator:
+#     """Iterator for creating batches on-the-fly.
 
-    FIX 2026-02-26: Added separate src_tokenizer and tgt_tokenizer parameters to fix
-    tokenizer usage bug where German text was incorrectly tokenized with English tokenizer.
-    """
+#     FIX 2026-02-26: Added separate src_tokenizer and tgt_tokenizer parameters to fix
+#     tokenizer usage bug where German text was incorrectly tokenized with English tokenizer.
+#     """
 
-    def __init__(self, dataset, src_tokenizer, tgt_tokenizer=None, batch_size: int = 64,
-                 max_len: int = 100, shuffle: bool = True):
-        if tgt_tokenizer is None:
-            import warnings
-            warnings.warn("tgt_tokenizer not provided, using src_tokenizer for both source and target. "
-                         "This may cause incorrect tokenization for translation tasks.", DeprecationWarning)
-        self.dataset = dataset
-        self.src_tokenizer = src_tokenizer
-        self.tgt_tokenizer = tgt_tokenizer if tgt_tokenizer is not None else src_tokenizer
-        self.batch_size = batch_size
-        self.max_len = max_len
-        self.shuffle = shuffle
-        self.indices = list(range(len(dataset)))
+#     def __init__(self, dataset, src_tokenizer, tgt_tokenizer=None, batch_size: int = 64,
+#                  max_len: int = 100, shuffle: bool = True):
+#         if tgt_tokenizer is None:
+#             import warnings
+#             warnings.warn("tgt_tokenizer not provided, using src_tokenizer for both source and target. "
+#                          "This may cause incorrect tokenization for translation tasks.", DeprecationWarning)
+#         self.dataset = dataset
+#         self.src_tokenizer = src_tokenizer
+#         self.tgt_tokenizer = tgt_tokenizer if tgt_tokenizer is not None else src_tokenizer
+#         self.batch_size = batch_size
+#         self.max_len = max_len
+#         self.shuffle = shuffle
+#         self.indices = list(range(len(dataset)))
 
-        if self.shuffle:
-            np.random.shuffle(self.indices)
+#         if self.shuffle:
+#             np.random.shuffle(self.indices)
 
-    def __iter__(self):
-        if self.shuffle:
-            np.random.shuffle(self.indices)
+#     def __iter__(self):
+#         if self.shuffle:
+#             np.random.shuffle(self.indices)
 
-        for i in range(0, len(self.indices), self.batch_size):
-            batch_indices = self.indices[i:i + self.batch_size]
-            samples = [self.dataset[j] for j in batch_indices]
-            yield create_batch(samples, self.src_tokenizer, self.tgt_tokenizer, self.max_len)  # FIX 2026-02-26: Pass both tokenizers
+#         for i in range(0, len(self.indices), self.batch_size):
+#             batch_indices = self.indices[i:i + self.batch_size]
+#             samples = [self.dataset[j] for j in batch_indices]
+#             yield create_batch(samples, self.src_tokenizer, self.tgt_tokenizer, self.max_len)  # FIX 2026-02-26: Pass both tokenizers
 
-    def __len__(self):
-        return (len(self.indices) + self.batch_size - 1) // self.batch_size
+#     def __len__(self):
+#         return (len(self.indices) + self.batch_size - 1) // self.batch_size

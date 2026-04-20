@@ -52,6 +52,7 @@ logs/
 runs/
 wandb/
 tensorboard/
+evaluation_results/
 *.log
 *.csv
 *.tsv

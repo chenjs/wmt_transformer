@@ -306,7 +306,8 @@ def main():
         src_file=src_file,
         tgt_file=tgt_file,
         output_dir=output_dir,
-        max_samples=200000,  # Match max_train_samples
+        # max_samples=200000,  # Match max_train_samples
+        max_samples=config.max_train_samples,
         min_words=3,
         max_words=100,
         max_ratio=3.0,
