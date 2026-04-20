@@ -35,7 +35,7 @@ class Config:
 
     # Data
     train_split: float = 0.99
-    max_train_samples: int = 300000  # Increased from 100000 for better learning
+    max_train_samples: int = 600000  # Increased from 100000 for better learning
 
     # Checkpoint
     checkpoint_dir: Path = Path(__file__).parent.parent / "models"

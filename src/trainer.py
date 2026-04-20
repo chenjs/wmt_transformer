@@ -317,12 +317,94 @@ class Trainer:
     #         print(f"Warning: Failed to read validation log: {e}")
     #     return last_step
 
+    def _get_min_val_loss(self, val_log_path):
+        """Get the minimum validation loss from validation log file."""
+        import csv
+        import os
+
+        min_val_loss = float('inf')
+        try:
+            if val_log_path is None:
+                return min_val_loss
+            if os.path.exists(val_log_path):
+                with open(val_log_path, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    # Skip header
+                    next(reader, None)
+                    for row in reader:
+                        if row and len(row) >= 2:
+                            try:
+                                val_loss = float(row[1])
+                                if val_loss < min_val_loss:
+                                    min_val_loss = val_loss
+                            except ValueError:
+                                continue
+        except Exception as e:
+            print(f"Warning: Failed to read validation log for min loss: {e}")
+        return min_val_loss
+    
+    def _check_and_save_best_model(self, val_loss, best_val_loss, global_step):
+        should_save = False
+        if best_val_loss == float('inf'):
+            should_save = True
+        else:
+            # Avoid division by zero
+            if val_loss == 0:
+                improvement = float('inf')  # Infinite improvement if loss goes to 0
+            else:
+                improvement = (best_val_loss - val_loss) / val_loss
+            # Check if improvement meets threshold
+            if (hasattr(self.config, 'min_loss_improvement') and
+                self.config.min_loss_improvement is not None and
+                self.config.min_loss_improvement > 0):
+
+                if improvement >= self.config.min_loss_improvement:
+                    should_save = True
+                else:
+                    print(f"Validation Loss improved by {improvement:.2%} but below threshold {self.config.min_loss_improvement:.2%}, skipping save")
+            else:
+                # Default behavior: any improvement
+                should_save = True
+
+        if should_save:
+            self.save_checkpoint(f"best_model.pt", global_step)
+            return val_loss  # Return new best validation loss
+        else:
+            return best_val_loss  # Return unchanged best validation loss
+
+    def _prepare_loggers(self, start_step=0):
+        # Open log files
+        step_log_path = self.log_dir / "step_log.csv"
+        epoch_log_path = self.log_dir / "epoch_log.csv"
+        val_log_path = self.log_dir / "val_log.csv"
+
+        # Write headers if files don't exist
+        if not step_log_path.exists() or (start_step == 0):
+            with open(step_log_path, 'w', encoding='utf-8') as f:
+                f.write("step,loss,lr\n")
+        if not epoch_log_path.exists() or (start_step == 0):
+            with open(epoch_log_path, 'w', encoding='utf-8') as f:
+                f.write("step,epoch_loss,lr\n")
+        if not val_log_path.exists() or (start_step == 0):
+            with open(val_log_path, 'w', encoding='utf-8') as f:
+                f.write("step,val_loss\n")
+
+        # Open files for appending
+        step_log_file = open(step_log_path, 'a', encoding='utf-8')
+        epoch_log_file = open(epoch_log_path, 'a', encoding='utf-8')
+        val_log_file = open(val_log_path, 'a', encoding='utf-8')
+
+        return (step_log_file, epoch_log_file, val_log_file, val_log_path)     
+       
+
     def train_epoch(self, dataset, batch_size: int, max_len: int = 100, global_step: int = 0, step_log_file=None,
                    val_log_file=None, val_log_path=None):
         """Train for one epoch."""
         self.model.train()
         total_loss = 0
         num_batches = 0
+
+        best_val_loss = self._get_min_val_loss(val_log_path)
 
         # Create batches
         indices = list(range(len(dataset)))
@@ -366,10 +448,16 @@ class Trainer:
                     val_log_file.write(f"{global_step},{val_loss:.6f}\n")
                     val_log_file.flush()
                     print(f"In-epoch validation result saved")
+                    # Check and save best model, update best_val_loss
+                    best_val_loss = self._check_and_save_best_model(val_loss, best_val_loss, global_step)
                 else:
                     print(f"ERROR: In-epoch validation loss is None at step {global_step}")
 
                 print(f"{'='*60}\n")
+
+            # Periodic checkpoint (save every save_interval steps)
+            if global_step > 0 and global_step % self.config.save_interval == 0:
+                self.save_checkpoint(f"checkpoint_step_{global_step}.pt", global_step)    
 
         # Calculate average loss for the epoch
         epoch_loss = total_loss / num_batches if num_batches > 0 else 0
@@ -393,33 +481,17 @@ class Trainer:
         dataset_size = len(dataset)
         batches_per_epoch = dataset_size // batch_size
 
-        # Open log files
-        step_log_path = self.log_dir / "step_log.csv"
-        epoch_log_path = self.log_dir / "epoch_log.csv"
-        val_log_path = self.log_dir / "val_log.csv"
+        step_log_file, epoch_log_file, val_log_file, val_log_path = self._prepare_loggers(start_step)
 
-        # Write headers if files don't exist
-        if not step_log_path.exists():
-            with open(step_log_path, 'w', encoding='utf-8') as f:
-                f.write("step,loss,lr\n")
-        if not epoch_log_path.exists():
-            with open(epoch_log_path, 'w', encoding='utf-8') as f:
-                f.write("step,epoch_loss,lr\n")
-        if not val_log_path.exists():
-            with open(val_log_path, 'w', encoding='utf-8') as f:
-                f.write("step,val_loss\n")
-
-        # Open files for appending
-        step_log_file = open(step_log_path, 'a', encoding='utf-8')
-        epoch_log_file = open(epoch_log_path, 'a', encoding='utf-8')
-        val_log_file = open(val_log_path, 'a', encoding='utf-8')
-
-        i_epoch = 0
+        # i_epoch = 0
+        i_epoch = global_step // (len(dataset) // batch_size)
         try:
             while global_step < max_steps:
                 # Train for one epoch
                 i_epoch += 1
 
+                print(f"Epoch[{i_epoch}] ...")
+                      
                 epoch_loss, global_step = self.train_epoch(dataset, batch_size, max_len, global_step, step_log_file,
                                                           val_log_file, val_log_path)
 
@@ -477,7 +549,7 @@ class Trainer:
                             if improvement >= self.config.min_loss_improvement:
                                 should_save = True
                             else:
-                                print(f"Loss improved by {improvement:.2%} but below threshold {self.config.min_loss_improvement:.2%}, skipping save")
+                                print(f"Train Loss improved by {improvement:.2%} but below threshold {self.config.min_loss_improvement:.2%}, skipping save")
                         else:
                             # Default behavior: any improvement
                             should_save = True
@@ -487,9 +559,9 @@ class Trainer:
                         self.save_checkpoint(f"best_model.pt", global_step)
                         print(f"Saved best model (loss={best_loss:.4f}, improvement={improvement:.2%})")
 
-                # Periodic checkpoint (save every save_interval steps)
-                if global_step > 0 and global_step % self.config.save_interval == 0:
-                    self.save_checkpoint(f"checkpoint_step_{global_step}.pt", global_step)
+                # # Periodic checkpoint (save every save_interval steps)
+                # if global_step > 0 and global_step % self.config.save_interval == 0:
+                #     self.save_checkpoint(f"checkpoint_step_{global_step}.pt", global_step)
 
                 # Stop if max steps reached
                 if global_step >= max_steps:
